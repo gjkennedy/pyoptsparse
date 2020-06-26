@@ -149,8 +149,14 @@ class ParOpt(Optimizer):
 
         if self.unconstrained:
             m = 0
+            mineq = 0
         else:
-            indices, blc, buc, fact = self.optProb.getOrdering(["ne", "le", "ni", "li"], oneSided=oneSided)
+            # Get the number of inequality constraints
+            indices, blc, buc, fact = self.optProb.getOrdering(["ni", "li"], oneSided=oneSided)
+            mineq = len(indices)
+
+            # Get the full list of constraints, order the equalities last as required
+            indices, blc, buc, fact = self.optProb.getOrdering(["ni", "li", "ne", "le"], oneSided=oneSided)
             m = len(indices)
             self.optProb.jacIndices = indices
             self.optProb.fact = fact
@@ -161,8 +167,8 @@ class ParOpt(Optimizer):
             self._setHistory(storeHistory, hotStart)
 
             class Problem(_ParOpt.Problem):
-                def __init__(self, ptr, n, m, xs, blx, bux):
-                    super(Problem, self).__init__(MPI.COMM_SELF, n, m)
+                def __init__(self, ptr, n, m, mineq, xs, blx, bux):
+                    super(Problem, self).__init__(MPI.COMM_SELF, n, m, mineq)
                     self.ptr = ptr
                     self.n = n
                     self.m = m
@@ -210,8 +216,8 @@ class ParOpt(Optimizer):
 
             optTime = MPI.Wtime()
 
-            # Optimize the problem
-            problem = Problem(self, n, m, xs, blx, bux)
+            # Create the problem
+            problem = Problem(self, n, m, mineq, xs, blx, bux)
             optimizer = _ParOpt.Optimizer(problem, self.set_options)
             optimizer.optimize()
             x, z, zw, zl, zu = optimizer.getOptimizedPoint()
